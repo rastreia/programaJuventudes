@@ -1,0 +1,285 @@
+---
+title: "Rede de Instituições Parceiras - GERAL"
+subtitle: "Análises descritivas dos dados"
+date: "21 de fevereiro de 2017"
+output: html_notebook
+---
+
+![](C:/Users/x6905399/Documents/RASTREIA/RastreiaLogo.png)
+
+```{r, include=FALSE}
+##############################################
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+library(ggplot2)
+library(data.table)
+library(bit64)
+library(DT)
+library(magrittr)
+library(descr)
+library(lubridate)
+library(tidyr)
+library(dplyr)
+library(tm)
+
+#Carregando os bancos de dados
+setwd('C:/Users/x6905399/Documents/RASTREIA/JUVENTUDES')
+redes = fread('rede_instituicoes_parceiras.csv', encoding="UTF-8") %>% 
+  as.data.frame(., stringsAsFactors=F)
+coletivos = fread('coletivos.csv', encoding="UTF-8") %>% 
+  as.data.frame(., stringsAsFactors=F)
+referencias = fread('referencias_comunitarias.csv', encoding="UTF-8") %>% 
+  as.data.frame(., stringsAsFactors=F) %>% .[-1,]
+
+redes$tipo = 'Instituição'
+coletivos$tipo = 'Coletivo'
+referencias$tipo = 'Referência'
+
+redes[,4][redes[,4] == "Jaqueline"] = "Jaqueline Silva"
+redes[,4][redes[,4] == "paula neres"] = "Paula Neres"
+coletivos[,4][coletivos[,4] == "Jaqueline"] = "Jaqueline Silva"
+referencias[,4][referencias[,4] == "Jaqueline"] = "Jaqueline Silva"
+
+names(coletivos)[3] = 'Serviço'
+
+
+```
+
+# Perfil das Instituições
+
+```{r, echo=FALSE}
+inst = data.frame(redes[,c(8,7,14,13,16,17,19)])
+colet = data.frame(coletivos[,c(8,7,13,12,15,16,18)])
+
+names(inst) = c('Nome da instituição','Área de atuação','Cidade', 'Bairro',
+                'Telefone','E-mail','Responsável')
+names(colet) = c('Nome da instituição','Área de atuação','Cidade', 'Bairro',
+                'Telefone','E-mail','Responsável')
+instituicoes = rbind(inst, colet)
+datatable(instituicoes)
+```
+
+### Áreas de atuação das instituições
+
+```{r, echo=FALSE, fig.width=9, fig.height=7}
+area_atuacao = instituicoes$`Área de atuação` %>% strsplit(., ', ', fixed=T) %>%
+  unlist
+
+tab_area_atuacao = table(area_atuacao) %>% as.data.frame(., stringsAsFactors=F)
+
+ggplot(tab_area_atuacao, aes(area_atuacao, Freq))+
+  geom_bar(stat = 'identity',fill='#ffd42a')+
+  scale_x_discrete(limits=rev(levels(factor(tab_area_atuacao$area_atuacao))))+
+  labs(x='', y='')+coord_flip()
+```
+
+
+
+### Serviços oferecidos pelas instituições, coletivos e referências comunitárias
+
+```{r, echo=FALSE}
+inst_ativ = c(redes[,8], coletivos[,8], referencias[,6])
+atividades = c(redes[,38], coletivos[,37], referencias[,13])
+ativ_realiz = data.frame(inst_ativ, atividades, stringsAsFactors = F)
+names(ativ_realiz) = c("Instituição/Coletivo/Referência","Principais serviços oferecidos")
+datatable(ativ_realiz)
+```
+
+
+
+
+
+# Público Atendido
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, results='asis'}
+jovens1 = redes[,29]
+jovens2 = redes[,31]
+jovens3 = redes[,33]
+
+jovens1 = jovens1 %>% removePunctuation %>% as.numeric
+jovens2 = jovens2 %>% removePunctuation %>% as.numeric
+jovens3 = jovens3 %>% removePunctuation %>% as.numeric
+
+total = sum(jovens1, na.rm = T)+sum(jovens2, na.rm = T)+sum(jovens3, na.rm = T)
+
+jovens_atendidos = data.frame(idade=c('15-18','19-24','25-29','Total'),
+                              atendidos=c(sum(jovens1, na.rm = T), 
+                                          sum(jovens2, na.rm = T), 
+                                          sum(jovens3, na.rm = T),
+                                          total),
+                              percentuais=c((sum(jovens1, na.rm = T)/total)*100,
+                                            (sum(jovens2, na.rm = T)/total)*100,
+                                            (sum(jovens3, na.rm = T)/total)*100,
+                                            100))
+names(jovens_atendidos) = c('Faixa Etária','Quantidade de atendidos','Percentuais')
+knitr::kable(jovens_atendidos)
+```
+
+
+Este dado está bastante problemático. Não há padronização das repostas no questionário. Vejam alguns exemplos de respostas:
+
+
+
+```{r, echo=F}
+jovens_redes = cbind(redes[,c(29,31,33)])
+datatable(jovens_redes)
+```
+
+
+## Dificuldades enfrentadas no atendimento aos jovens
+
+```{r, include=FALSE}
+library(tm)
+library(wordcloud)
+
+pal2 = brewer.pal(8,'Dark2')
+
+dificuldades = redes[,39] %>% tolower %>% removePunctuation %>%
+  removeWords(., stopwords('pt')) %>% removeWords(., c('jovens','jovem'))
+
+corpus = Corpus(VectorSource(dificuldades))
+tdm <- TermDocumentMatrix(corpus)
+tdm <- removeSparseTerms(tdm, sparse = 0.96)
+df <- as.data.frame(inspect(tdm))
+df.scale <- scale(df)
+d <- dist(df.scale, method = "euclidean")
+fit.ward2 <- hclust(d, method = "ward.D2")
+```
+
+```{r, echo=FALSE, fig.width=10, fig.height=6, message=FALSE}
+#plotando
+par(mfrow=c(1,2))
+wordcloud(dificuldades, min.freq=2,max.words=100, random.order=F, colors=pal2)
+plot(fit.ward2, xlab = '',ylab = '',main = 'Dendograma'); rect.hclust(fit.ward2, k=7, border='#ffd42a')
+par(mfrow=c(1,1))
+```
+
+
+## Demandas dos jovens
+
+```{r, echo=FALSE, fig.width=10, fig.height=6, message=FALSE}
+demandas = redes[,40] %>% tolower %>% removePunctuation %>%
+  removeWords(., stopwords('pt'))  %>% removeWords(., 'jovens')
+
+dem_nao_atend = redes[,41] %>% tolower %>% removePunctuation %>%
+  removeWords(., stopwords('pt'))  %>% removeWords(., 'jovens')
+
+par(mfrow=c(1,2))
+wordcloud(demandas, min.freq=2,max.words=100, random.order=F, colors=pal2)
+title(xlab='Principais demandas')
+wordcloud(dem_nao_atend, min.freq=2,max.words=100, random.order=F, colors=pal2)
+title(xlab='Demandas não atendidas')
+par(mfrow=c(1,1))
+```
+
+
+# Parcerias e participação política
+
+```{r, echo=FALSE, fig.width=10, fig.height=4, message=FALSE}
+tab4 = table(c(redes[,46],coletivos[,43])) %>% as.data.frame(.,stringsAsFactors=F)
+tab5 = table(c(redes[,48],coletivos[,45])) %>% as.data.frame(.,stringsAsFactors=F)
+
+g4 = ggplot(tab4, aes(x=Var1,y=Freq))+geom_bar(stat='identity',fill='#ffd42a')+
+  labs(x='',y='',title='A instituição/coletivo participa de rede local?')
+g5 = ggplot(tab5, aes(x=Var1,y=Freq))+geom_bar(stat='identity',fill='#ffd42a')+
+  labs(x='',y='',title='Participa de espaços de discussão política?')
+
+multiplot(g4,g5, cols=2)
+```
+
+
+### Redes locais e espaços de discussão da política de juventudes
+
+```{r, echo=FALSE}
+parcerias_redes = redes[,c(8,47,49)]
+parcerias_coletivos = coletivos[,c(8,44,46)]
+names(parcerias_redes) = c('Instituição/Coletivo','Rede local','Espaços de discussão política')
+names(parcerias_coletivos) = c('Instituição/Coletivo','Rede local','Espaços de discussão política')
+parcerias = rbind(parcerias_redes, parcerias_coletivos)
+datatable(parcerias)
+```
+
+
+# Avaliação das parcerias
+
+```{r, echo=FALSE}
+tab3 = table(c(redes[,50],coletivos[,47])) %>% as.data.frame(., stringsAsFactors=F)
+tab3$Var1 = as.factor(tab3$Var1) %>% as.factor
+ggplot(tab3, aes(x=ordered(Var1, levels=c('Péssimo','Ruim','Médio','Bom')),
+                 y=Freq))+geom_bar(stat='identity',fill='#ffd42a')+
+  labs(x='',y='',title='Como avalia o trabalho em parceria?')+coord_flip()
+```
+
+```{r, echo=FALSE}
+avalia_parceria_redes = redes[,c(8,50,51)]
+avalia_parceria_coletivos = coletivos[, c(8,47,48)]
+names(avalia_parceria_redes) = c('Instituição/Coletivo', 'Como você avalia os trabalhos em parceria?','Porque?')
+names(avalia_parceria_coletivos) = c('Instituição/Coletivo', 'Como você avalia os trabalhos em parceria?','Porque?')
+avalia_parceria = rbind(avalia_parceria_redes, avalia_parceria_coletivos)
+datatable(avalia_parceria)
+```
+
+
+
+# Cooperação com JUVENTUDES
+
+```{r, echo=FALSE}
+interesse = table(redes[,52]) %>% as.data.frame(., stringsAsFactors=F)
+possibilidades = strsplit(redes[,53], ', ', fixed=T) %>% unlist
+
+ggplot(interesse, aes(x=Var1,y=Freq))+geom_bar(stat='identity',fill='#ffd42a')+
+  labs(title='Existe interesse em parceria com JUVENTUDES?',x='',y='')
+```
+
+### Possibilidades de parceria com JUVENTUDES
+
+```{r, echo=FALSE, fig.width=12, fig.height=6, message=FALSE}
+ggplot(NULL, aes(possibilidades))+geom_bar(fill='#ffd42a')+
+  labs(x='',y='')+coord_flip()
+```
+
+
+
