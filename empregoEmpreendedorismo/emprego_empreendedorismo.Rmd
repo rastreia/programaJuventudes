@@ -1,0 +1,333 @@
+---
+title: "Oportunidades de Emprego e Empreendedorismo"
+output:
+  html_notebook: default
+date: "03 de março de 2017"
+---
+
+![](C:/Users/x6905399/Documents/RASTREIA/RastreiaLogo.png)
+
+### Monitoramento das aplicações dos questionários
+
+```{r setup, include=F}
+library(data.table)
+library(bit64)
+library(DT)
+library(magrittr)
+library(descr)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(scales)
+library(maptools)
+library(maps)
+library(tidyr)
+library(plotly)
+##############################################
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  library(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+setwd("C:/Users/x6905399/Documents/RASTREIA/JUVENTUDES")
+dados <- fread('emprego_empreendedorismo.csv', encoding="UTF-8") %>% 
+  as.data.frame(., stringsAsFactors=F) %>% .[-2,]
+dados[,4][dados[,4] == 'Moisés Ezequiel Macedo'] = 'Moisés Ezequiel Macêdo'
+dados[,4][dados[,4] == 'FREDERICO MENDES'] = 'FREDERICO MENDES DE CARVALHO'
+```
+
+```{r, echo=FALSE}
+tabela = freq(dados[,4], plot=F) %>% as.data.frame(., stringsAsFactors=F)
+tabela$pertotal = (tabela[,1] * 100) / 50
+tabela = mutate(tabela,
+                pertotal2 = pertotal %>% as.character %>% paste0(., '%'),
+                nomes = rownames(tabela))
+names(tabela) = c('Frequência','Percentual','Percentual do total',
+                  'Percentual do total (50)', 'Nome do Consultor')
+
+datatable(tabela[-nrow(tabela),c(5,1,4)])
+```
+
+### Fluxo das aplicações
+
+```{r, echo=FALSE, warning=FALSE}
+datas = dados[,1] %>% dmy_hms %>% as_date %>%
+  table %>% as.data.frame(., stringsAsFactors=F)
+  
+limits = c(20170129,20170227) %>% ymd %>% as_date
+names(datas) = c('Data','Questionários')
+datas$Data %<>% as_date
+
+g = ggplot(datas, aes(x=Data, y=Questionários))+geom_line(lwd=1)+
+  scale_x_date(date_minor_breaks = '1 week', date_breaks = '1 week',
+               date_labels = '%d/%m', limits = limits)+
+  labs(x='Data de lançamento',y='Número de questionários')
+
+ggplotly(g)
+```
+
+
+### Locais das aplicações
+
+```{r, echo=FALSE, include=FALSE}
+dados$servico = dados$Serviço
+dados = dados %>% separate(servico, c('parte1','regiao'), ' / ')
+
+dados$regiao %>% freq(., plot=F)
+dados2 = dados %>% separate(regiao, c('r1','r2','r3'), ' e ')
+regioes_desag = rbind(dados2$r1, dados2$r2, dados2$r3)
+locais = freq(regioes_desag, plot=F) %>% as.data.frame(., stringsAsFactors=F) %>%
+  .[-c(nrow(.), nrow(.)-1),]
+locais = mutate(locais,
+                nomes = rownames(locais),
+                lat = c(-19.939045,-19.912857,-20.027582,-19.764419,
+                        -19.907773,-19.828723,-19.951469,
+                        
+                        -19.945829,-19.830853,
+                        -20.039762,-19.962187,-19.953818,-19.916447),
+                
+                lon = c(-43.919928,-43.893466,-44.228331,-44.145917,
+                        -43.882842,-43.925793,-44.117417,
+                        
+                        -43.963345,-44.150248,
+                        -44.216812,-43.947033,-43.941464,-43.885229))
+library(leaflet)
+```
+
+```{r, echo=FALSE, fig.height=6, fig.width=9}
+mymap <- leaflet() %>% 
+  addProviderTiles("OpenStreetMap.Mapnik",
+                   options = tileOptions(minZoom=10, maxZoom=16)) %>% #"freeze" the mapwindow to max and min zoomlevel
+  setView(-44.06,-19.92, zoom=10) %>%
+  addCircleMarkers(lng=locais$lon,
+            lat=locais$lat,
+            radius = locais$`% Válido`,
+            color = 'blue',
+            fillColor = 'blue',
+            popup = paste0("<b>",locais$nomes,"</b><br>Número de Empreendimentos:<br><b>",locais$Frequência,"</b>")
+  )
+mymap
+```
+
+
+# Proporções de tipos de empreendimento
+
+```{r, echo=F, fig.width=9, fig.height=6}
+universo = fread('percentual_empreendimentos.csv', dec = ',') %>% 
+  as.data.frame(., stringsAsFactors=F)
+names(universo)[9] = "Regiões JUVENTUDES percent"
+universo = universo[-22,]
+
+# proporções no universo
+
+ggplot(universo, aes(x=`Descrição CNAE`, 
+                     y=`Regiões JUVENTUDES`/sum(universo$`Regiões JUVENTUDES`)))+
+  geom_bar(stat='identity', fill='#ffd42a')+
+  labs(title='Universo (percentual)', x='',y='')+
+  scale_x_discrete(limits=rev(levels(factor(universo$`Descrição CNAE`))))+
+  scale_y_continuous(labels=percent)+
+  coord_flip()
+```
+
+```{r, echo=F, fig.width=9, fig.height=6, message=FALSE, warning=FALSE}
+# proporções na amostra
+setor_amostra = freq(dados$`1.1 | Qual é o setor econômico do empreendimento?`,plot=F) %>%
+  as.data.frame(., stringsAsFactors=F)
+setor_amostra = mutate(setor_amostra,
+                       nome = rownames(setor_amostra))
+setor_amostra %<>% .[-nrow(setor_amostra),]
+ggplot(setor_amostra, aes(x=nome))+
+  geom_bar(aes(y=Frequência/sum(setor_amostra$Frequência)),stat='identity', fill='#ffd42a')+
+  labs(title='Amostra (percentual)', x='',y='')+
+  scale_y_continuous(labels=percent)+
+  coord_flip()
+```
+
+### Tipos de empreendimento
+
+```{r, echo=F, warning=FALSE, message=FALSE}
+tipo_empreend = dados[,c(8,6,7)]
+names(tipo_empreend) = c('Nome do empreendimento', 'Setor econômico', 'Tipo de empreendimento')
+datatable(tipo_empreend)
+```
+
+### Qualificações dos empreendedores
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.width=12, fig.height=6}
+teve_quali = freq(dados[,23], plot=F) %>% as.data.frame(., stringsAsFactors=F)
+teve_quali = mutate(teve_quali,
+                       nome = rownames(teve_quali))
+teve_quali %<>% .[-nrow(teve_quali),]
+g1 = ggplot(teve_quali, aes(x=nome))+
+  geom_bar(aes(y=Frequência/sum(teve_quali$Frequência)),stat='identity', fill='#ffd42a')+
+  labs(title='Teve qualificação para empreender? (percentual)', x='',y='')+
+  scale_y_continuous(labels=percent)+
+  coord_flip()
+
+buscou_parceria = freq(dados[,26], plot=F) %>% as.data.frame(., stringsAsFactors=F)
+buscou_parceria = mutate(buscou_parceria,
+                         nome = rownames(buscou_parceria))
+buscou_parceria %<>% .[-nrow(buscou_parceria),]
+g2 = ggplot(buscou_parceria, aes(x=nome))+
+  geom_bar(aes(y=Frequência/sum(buscou_parceria$Frequência)),stat='identity', fill='#ffd42a')+
+  labs(title='Buscou ajuda ou parcerias para empreender? (percentual)', x='',y='')+
+  scale_y_continuous(labels=percent)+
+  coord_flip()
+
+multiplot(g1, g2, cols=2)
+```
+
+### Dificuldades para contratar jovens
+
+```{r, include=F}
+library(tm)
+library(wordcloud)
+pal2 = brewer.pal(8,'Dark2')
+
+dificuldades = dados[,48] %>% tolower %>% 
+  removePunctuation %>% removeWords(., stopwords('pt'))
+
+corpus = Corpus(VectorSource(enc2native(dificuldades)))
+# Preparando para o dendograma
+tdm <- TermDocumentMatrix(corpus)
+tdm <- removeSparseTerms(tdm, sparse = 0.97)
+df <- as.data.frame(inspect(tdm))
+df.scale <- scale(df)
+d <- dist(df.scale, method = "euclidean")
+fit.ward2 <- hclust(d, method = "ward.D2")
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.width=9, fig.height=6}
+par(mfrow=c(1,2))
+wordcloud(enc2native(dificuldades), min.freq=2,max.words=100, random.order=F, colors=pal2)
+plot(fit.ward2, xlab = '',ylab = '',main = 'Dendograma')
+par(mfrow=c(1,1))
+```
+
+
+### Por que não costuma contratar jovens?
+```{r, include=F}
+nao_contrat = dados[,50] %>% tolower %>% removePunctuation %>%
+  removeWords(.,stopwords('pt'))
+nao_contrat = gsub('ç','c', nao_contrat)
+nao_contrat = gsub('í','i', nao_contrat)
+nao_contrat = gsub('á','a', nao_contrat)
+nao_contrat = gsub('ó','o', nao_contrat)
+nao_contrat = gsub('é','e', nao_contrat)
+Encoding(nao_contrat) = 'latin1'
+
+corpus = Corpus(VectorSource(enc2native(nao_contrat)))
+tdm <- TermDocumentMatrix(corpus)
+tdm <- removeSparseTerms(tdm, sparse = 0.98)
+df <- as.data.frame(inspect(tdm))
+df.scale <- scale(df)
+d <- dist(df.scale, method = "euclidean")
+fit.ward2 <- hclust(d, method = "ward.D2")
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=9, fig.height=6}
+par(mfrow=c(1,2))
+wordcloud(nao_contrat, min.freq=2,max.words=100, random.order=F, colors=pal2)
+plot(fit.ward2, xlab = '',ylab = '',main = 'Dendograma')
+par(mfrow=c(1,1))
+```
+
+### Contrata jovens para trabalhar no seu empreedimento?
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, fig.width=12, fig.height=6}
+contrata_jovens = freq(dados[,49],plot = F) %>% as.data.frame(.,stringsAsFactors=F)
+contrata_jovens = mutate(contrata_jovens,
+                         nome = rownames(contrata_jovens))
+contrata_jovens %<>% .[-nrow(contrata_jovens),]
+
+g3 = ggplot(contrata_jovens, aes(x=nome))+
+  geom_bar(aes(y=Frequência/sum(contrata_jovens$Frequência)),stat='identity', fill='#ffd42a')+
+  labs(title='Você contrata jovens? (percentual)', x='',y='')+
+  scale_y_continuous(labels=percent)+
+  coord_flip()
+
+dificuldades_contratar = freq(dados[,51],plot=F) %>% as.data.frame(.,stringsAsFactors=F)
+dificuldades_contratar = mutate(dificuldades_contratar,
+                                nome = rownames(dificuldades_contratar))
+dificuldades_contratar %<>% .[-nrow(dificuldades_contratar),]
+dificuldades_contratar$nome[dificuldades_contratar$nome == 'Não (Pular para questão 3.9)'] <- 'Não'
+
+g4 = ggplot(dificuldades_contratar, aes(x=nome))+
+  geom_bar(aes(y=Frequência/sum(dificuldades_contratar$Frequência)),stat='identity', fill='#ffd42a')+
+  labs(title='Dificuldades na contratação de jovens (percentual)', x='',y='')+
+  scale_y_continuous(labels=percent)+
+  coord_flip()
+multiplot(g3,g4,cols=2)
+```
+
+
+### Avaliação da qualificação dos jovens que trabalharam/trabalham com o empreendedor entrevistado
+
+```{r, echo=F, message=FALSE, warning=FALSE}
+avalia_quali = freq(dados[,60],plot=F) %>% as.data.frame(.,stringsAsFactors=F)
+avalia_quali = mutate(avalia_quali,
+                      nome = rownames(avalia_quali))
+avalia_quali %<>% .[-nrow(avalia_quali),]
+
+ggplot(avalia_quali, aes(x=nome))+
+  geom_bar(aes(y=Frequência/sum(avalia_quali$Frequência)),stat='identity', fill='#ffd42a')+
+  labs(title='', x='',y='')+
+  scale_y_continuous(labels=percent)+
+  coord_flip()
+```
+
+### Principais dificuldades dos empreendimentos
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+datatable(dados[,c(77:81)])
+```
+
+### Potencialidades e possibilidades
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+datatable(dados[,c(82:85)])
+```
+
