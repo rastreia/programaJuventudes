@@ -1,0 +1,55 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r}
+library(data.table)
+library(bit64)
+library(DT)
+library(magrittr)
+library(descr)
+library(dplyr)
+library(lubridate)
+library(gsubfn)
+library(scales)
+library(maptools)
+library(maps)
+library(tidyr)
+library(plotly)
+library(wordcloud)  
+library(tm)
+library(googlesheets)
+
+listaRegioes <- function(dados) {
+  lista <- c()
+  
+  for(i in dados$Serviço){
+    if (i %in% lista == F){
+      #print(i %in% lista)
+      lista <- c(lista, i)
+    } 
+  }
+  return(lista)
+}
+
+gs_auth()
+gs <- gs_key("10_Gn2GZUTSgygFzwUDz91Tk_weeJuoR03oq95dQ3Dzo")
+dados <- gs_read_csv(gs, ws = 1) %>% as.data.frame(., stringsAsFactors=F) %>% .[-1,]
+
+#Mobilizador
+dados[3][dados[3] == 'Consultor Empreendedorismo 4 - Betim / Jardim Teresópolis e Citrolândia e Santa Isabel'] = 'Mobilizador Social 4 - Betim / Jardim Teresópolis'
+dados[3][dados[3] == 'Consultor Emprego 4  - Betim / Jardim Teresópolis e Citrolândia e Santa Isabel'] = 'Mobilizador Social 4 - Betim / Jardim Teresópolis'
+#Correções de mal preenchimento - END
+
+
+mobilizadoresRegioes <- listaRegioes(dados)
+d<-as.data.frame(mobilizadoresRegioes)
+d <- d %>% separate(mobilizadoresRegioes, c('mobilizador','regiao'), ' - ')
+
+write.table(d[1], "regioes.txt", row.names = F, col.names = F, quote = F)
+
+```
+

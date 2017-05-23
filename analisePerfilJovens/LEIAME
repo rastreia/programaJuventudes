@@ -1,0 +1,6 @@
+Para compilar, chame:
+
+Rscript -e "rmarkdown::render('juventudes.RMD')"
+
+Rscript -e "rmarkdown::render('juventudes.RMD', output_file = 'JESUS')" 1
+
