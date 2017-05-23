@@ -1,8 +1,11 @@
-# programaJuventudes
+# analisePerfilJovens
 Script automatizado para análise do perfil social dos jovens.
 
-Para usar:
+## instruções
+
+Dê permissões:
 > \# chmod + 777 script.sh
 
+Execute
 > $ ./script.sh
 _____________________________________________________________________________
